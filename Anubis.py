@@ -3,10 +3,11 @@
 #############      I've borrowed a function (serial_ports()) from a guy in stack overflow whome I can't remember his name, so I gave hime the copyrights of this function, thank you  ########
 
 
-from io import StringIO
 import sys
 import glob
 import serial
+
+from io import StringIO
 
 import Python_Coloring
 from PyQt5 import QtCore
@@ -70,6 +71,7 @@ class Signal(QObject):
 # Making text editor as A global variable (to solve the issue of being local to (self) in widget class)
 text = QTextEdit
 text2 = QTextEdit
+argsText = QLineEdit
 
 #
 #
@@ -114,7 +116,6 @@ class text_widget(QWidget):
 #
 #
 class Widget(QWidget):
-    paramsLine = QLineEdit
 
     def __init__(self):
         super().__init__()
@@ -177,14 +178,21 @@ class Widget(QWidget):
         # I defined a new splitter to seperate between the upper and lower sides of the window
         V_splitter = QSplitter(Qt.Vertical)
         V_splitter.addWidget(H_splitter)
-        V_splitter.addWidget(text2)
 
-        paramsLbl = QLabel(self)
-        paramsLbl.setText("Use only for Run Function feature\nParameters, separated by a semicolon ';' ")
-        V_splitter.addWidget(paramsLbl)
-        global paramsLine
-        paramsLine = QLineEdit(self)
-        V_splitter.addWidget(paramsLine)
+        #adding arguments and their label
+        labelForArgs = QLabel(self)
+        labelForArgs.setText("Please enter the specified the parameters for the functions NOTE:They must be separated by , ")
+        V_splitter.addWidget(labelForArgs)
+        global argsText
+        argsText = QLineEdit(self)
+        V_splitter.addWidget(argsText)
+
+        labelForOut = QLabel(self)
+        labelForOut.setText("Output")
+        V_splitter.addWidget(labelForOut)
+
+
+        V_splitter.addWidget(text2)
 
         Final_Layout = QHBoxLayout(self)
         Final_Layout.addWidget(V_splitter)
@@ -236,6 +244,9 @@ def Openning(s):
     b = Signal()
     b.reading.connect(Widget.Open)
     b.reading.emit(s)
+
+
+        
 #
 #
 #
@@ -309,11 +320,6 @@ class UI(QMainWindow):
         filemenu.addAction(Open_Action)
 
 
-        RunFunction = menu.addMenu('Run Function')
-        RunFunctionAction = QAction("RunFunction", self)
-        RunFunctionAction.triggered.connect(self.RunFunction)
-        RunFunction.addAction(RunFunctionAction)
-
         # Seting the window Geometry
         self.setGeometry(200, 150, 600, 500)
         self.setWindowTitle('Anubis IDE')
@@ -325,63 +331,51 @@ class UI(QMainWindow):
         self.setCentralWidget(widget)
         self.show()
 
-
-    def RunFunction(self):
-        code = text.toPlainText()
-        text2.clear()
-
-        if len(code) > 7 and code[0:4] == 'def ':
-            name = code[0:code.find("(")]
-            call = name + "("
-            parameters = paramsLine.text().split(';')
-
-            for i in parameters:
-                call+= i + ","
-            call = call[4:len(call) - 1]
-            call += ')'
-            print(code + "\n" + call)
-            try:
-                codeOut = StringIO()
-                sys.stdout = codeOut
-                exec(code + "\n" + call)
-                text2.append(codeOut.getvalue())
-                sys.stdout = sys.__stdout__
-                codeOut.close()
-            except:
-                text2.append("Running Threw an exception")
-        else:	       
-            text2.append("To use this feature, please write a single function like\ndef HelloWorld():\n\tprint('Hello World')")
-
     ###########################        Start OF the Functions          ##################
     def Run(self):
-        if self.port_flag == 0:
-            mytext = text.toPlainText()
-        #
-        ##### Compiler Part
-        #
-#            ide.create_file(mytext)
-#            ide.upload_file(self.portNo)
-            text2.append("Sorry, there is no attached compiler.")
+        code_To_Exec = text.toPlainText()
+        start_Index = code_To_Exec.find("def ")
+        if start_Index >= 0:
+            endFuncName = code_To_Exec.find("(", start_Index)
+            funcName = code_To_Exec[start_Index+4:endFuncName]
+            # print(funcName)
+            funcCall = "\n\n" + funcName + "("
+            argsProvided = argsText.text().split(',')
+            
+            for i in argsProvided:
+                funcCall= funcCall+ i + ","
+            funcCall = funcCall[0:len(funcCall) - 1]
+            funcCall =funcCall + ')'
+            try:
+                codeOut = StringIO()
+                codeErr = StringIO()
+                sys.stdout = codeOut
+                sys.stderr = codeErr
+                text2.append(exec(codeToExec + funcCall))
+                text2.append(codeOut.getvalue())
+                text2.append(codeErr.getvalue())
+                # restore stdout and stderr
+                sys.stdout = sys.__stdout__
+                sys.stderr = sys.__stderr__
+                codeOut.close()
+                codeErr.close()
+            except:
+                text2.append("Error: Recheck your code please!")
 
-        else:
-            text2.append("Please Select Your Port Number First")
-
-
-    # this function is made to get which port was selected by the user
     @QtCore.pyqtSlot()
     def PortClicked(self):
         action = self.sender()
         self.portNo = action.text()
         self.port_flag = 0
-
-
-
     # I made this function to save the code into a file
     def save(self):
         self.b.reading.emit("name")
+
+
     # I made this function to open a file and exhibits it to the user in a text editor
     def open(self):
         file_name = QFileDialog.getOpenFileName(self,'Open File','/home')
+
         if file_name[0]:
             f = open(file_name[0],'r')
             with f:
@@ -398,4 +392,5 @@ class UI(QMainWindow):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     ex = UI()
+    # ex = Widget()
     sys.exit(app.exec_())
